@@ -10,6 +10,6 @@ async def home():
     return "Welcome home!"
 
 @app.get("/items/stream", response_class=EventSourceResponse)
-async def sse_items():
-    async for num in calculate_primes_for_generator(1000):
+async def sse_items(limit: int = 1000):
+    async for num in calculate_primes_for_generator(limit):
         yield num
