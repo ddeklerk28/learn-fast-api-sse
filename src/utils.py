@@ -1,4 +1,16 @@
 import asyncio
+from enum import Enum
+
+class PrimalityStrategy(str, Enum):
+    full = "full"
+    half = "half"
+    sqrt = "sqrt"
+
+STRATEGIES = {
+    PrimalityStrategy.full: lambda num: num,
+    PrimalityStrategy.half: lambda num: num // 2 + 1,
+    PrimalityStrategy.sqrt: lambda num: num ** 0.5 + 1,
+}
 
 async def calculate_primes_for_generator(target_number):
     for num in range(0, target_number + 1):

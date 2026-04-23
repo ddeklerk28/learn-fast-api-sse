@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
 
+
 from .utils import calculate_primes_for_generator
 
 app = FastAPI()

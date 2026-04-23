@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FastAPI SSE · Prime Streamer</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --border: #334155;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --ok: #4ade80;
+      --err: #f87171;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    h1 { margin: 0 0 1.5rem; font-size: 1.5rem; }
+    .controls {
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: flex-end;
+      margin-bottom: 1.25rem;
+    }
+    .field { display: flex; flex-direction: column; gap: 0.25rem; }
+    label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    input, select, button {
+      padding: 0.5rem 0.75rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.95rem;
+      font-family: inherit;
+    }
+    button {
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+    }
+    button.stop { background: var(--err); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .stats {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .stats b { color: var(--text); font-weight: 600; }
+    .status.streaming { color: var(--ok); }
+    .status.error { color: var(--err); }
+    .primes {
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 1rem;
+      min-height: 200px;
+      max-height: 60vh;
+      overflow-y: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .prime {
+      padding: 0.25rem 0.5rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+    .prime.new { animation: pop 0.25s ease-out; }
+    @keyframes pop {
+      0%   { transform: scale(0.5); background: var(--accent); color: var(--bg); }
+      100% { transform: scale(1); }
+    }
+  </style>
+</head>
+<body>
+  <h1>FastAPI SSE · Prime Streamer</h1>
+
+  <div class="controls">
+    <div class="field">
+      <label for="limit">Limit</label>
+      <input id="limit" type="number" min="1" max="100000" value="1000" />
+    </div>
+    <div class="field">
+      <label for="strategy">Strategy</label>
+      <select id="strategy">
+        <option value="full">full (O(n))</option>
+        <option value="half">half (O(n/2))</option>
+        <option value="sqrt" selected>sqrt (O(√n))</option>
+      </select>
+    </div>
+    <button id="start">Start</button>
+    <button id="stop" class="stop" disabled>Stop</button>
+  </div>
+
+  <div class="stats">
+    <div>Status: <b id="status" class="status">idle</b></div>
+    <div>Received: <b id="count">0</b></div>
+    <div>Elapsed: <b id="elapsed">0.00s</b></div>
+  </div>
+
+  <div id="primes" class="primes"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const $limit = $('limit');
+    const $strategy = $('strategy');
+    const $start = $('start');
+    const $stop = $('stop');
+    const $status = $('status');
+    const $count = $('count');
+    const $elapsed = $('elapsed');
+    const $primes = $('primes');
+
+    let source = null;
+    let startMs = 0;
+    let received = 0;
+    let timer = null;
+
+    function setStatus(text, cls = '') {
+      $status.textContent = text;
+      $status.className = 'status ' + cls;
+    }
+
+    function tick() {
+      $elapsed.textContent = ((performance.now() - startMs) / 1000).toFixed(2) + 's';
+    }
+
+    function cleanup() {
+      clearInterval(timer);
+      timer = null;
+      $start.disabled = false;
+      $stop.disabled = true;
+    }
+
+    function stop() {
+      if (source) {
+        source.close();
+        source = null;
+        setStatus('stopped');
+      }
+      cleanup();
+    }
+
+    function start() {
+      stop();
+      $primes.innerHTML = '';
+      received = 0;
+      $count.textContent = '0';
+      $elapsed.textContent = '0.00s';
+
+      const params = new URLSearchParams({
+        limit: $limit.value,
+        strategy: $strategy.value,
+      });
+      startMs = performance.now();
+      timer = setInterval(tick, 50);
+
+      source = new EventSource('/items/stream?' + params);
+      setStatus('streaming', 'streaming');
+      $start.disabled = true;
+      $stop.disabled = false;
+
+      source.onmessage = (e) => {
+        received++;
+        $count.textContent = received;
+        const el = document.createElement('span');
+        el.className = 'prime new';
+        el.textContent = JSON.parse(e.data);
+        $primes.appendChild(el);
+        $primes.scrollTop = $primes.scrollHeight;
+        setTimeout(() => el.classList.remove('new'), 250);
+      };
+
+      source.onerror = () => {
+        tick();
+        if (source && source.readyState === EventSource.CLOSED) {
+          setStatus('done', 'streaming');
+        } else {
+          setStatus('error', 'error');
+        }
+        cleanup();
+      };
+    }
+
+    $start.addEventListener('click', start);
+    $stop.addEventListener('click', stop);
+  </script>
+</body>
+</html>
