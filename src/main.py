@@ -1,10 +1,13 @@
 from fastapi import FastAPI, Request
 from fastapi.sse import EventSourceResponse, ServerSentEvent
+from fastapi.staticfiles import StaticFiles
 
 
 from .utils import calculate_primes_for_generator
 
 app = FastAPI()
+
+app.mount("/ui", StaticFiles(directory="src/static", html=True), name="ui")
 
 @app.get("/")
 async def home():
