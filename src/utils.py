@@ -14,6 +14,13 @@ STRATEGIES = {
 }
 
 async def calculate_primes_generator(target_number, strategy: PrimalityStrategy):
+    if strategy == PrimalityStrategy.full:
+        print("Will use the full list of potential factors")
+    elif strategy == PrimalityStrategy.half:
+        print("Will use half the list of potential factors")
+    else:
+        print("Will use trial division")
+
     get_factor_upper_limit = STRATEGIES[strategy]
     for num in range(0, target_number + 1):
         if num < 2:
